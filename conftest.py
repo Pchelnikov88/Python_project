@@ -1,14 +1,58 @@
-# =============================== реквестер ========================================
+# conftest.py
 
 from faker import Faker
 import pytest
 import requests
+import random
 from constants import BASE_URL, REGISTER_ENDPOINT, LOGIN_ENDPOINT
 from custom_requester.custom_requester import CustomRequester
 from utils.data_generator import DataGenerator
 from api_classes.api_manager import ApiManager
 
 faker = Faker()
+
+fake = Faker(locale='ru_RU')
+cities = ["SPB", "MSK"]
+SORT_OPTIONS = ["asc", "desc"]
+
+@pytest.fixture
+def movies_filter_params():
+    """Фикстура с параметрами для фильтрации фильмов"""
+    return {
+        "page": fake.random_int(min=1, max=10),
+        "pageSize": fake.random_int(min=5, max=20),
+        "minPrice": fake.random_int(min=1, max=500),
+        "maxPrice": fake.random_int(min=100, max=1000),
+        "locations": random.choice(cities),
+        "published": fake.boolean(),
+        "genreId": fake.random_int(min=1, max=10),
+        "createdAt": random.choice(SORT_OPTIONS)
+    }
+
+@pytest.fixture(scope="function")
+def creation_movies_list():
+    """Фикстура для генерации тестовых данных фильма."""
+    return {
+        "name": fake.catch_phrase(),
+        "price": fake.random_int(min=100, max=500),
+        "description": fake.text(max_nb_chars=200),
+        "location": random.choice(cities),
+        "published": fake.boolean(),
+        "genreId": fake.random_int(min=1, max=5)
+    }
+
+# @pytest.fixture(scope="session")
+# def params_():
+#     """Валидные данные для поиска фильмов"""
+#     return  {
+#         "pageSize": 10,
+#         "page": 1,
+#         "minPrice": 300,
+#         "maxPrice": 500,
+#         "locations": "MSK",
+#         "published": True,
+#         "createdAt": "asc"
+#     }
 
 @pytest.fixture(scope="session")
 def session():
@@ -68,6 +112,68 @@ def requester():
     """
     session = requests.Session()
     return CustomRequester(session=session, base_url=BASE_URL)
+
+
+@pytest.fixture(scope="function")
+def created_movie(api_manager):
+    """
+    Фикстура для создания фильма через API.
+    Возвращает данные созданного фильма.
+    Фильм автоматически удаляется после теста.
+    """
+    created_movies = []  # список созданных фильмов для очистки
+
+    def _create_movie(**kwargs):
+        # Базовые данные фильма
+        movie_data = {
+            "name": fake.catch_phrase(),
+            "price": fake.random_int(min=100, max=500),
+            "description": fake.text(max_nb_chars=200),
+            "location": random.choice(cities),
+            "published": fake.boolean(),
+            "genreId": fake.random_int(min=1, max=5),
+            "imageUrl": fake.image_url()
+        }
+        # Переопределяем переданными параметрами
+        movie_data.update(kwargs)
+
+        # Создаем фильм
+        response = api_manager.movies_api.create_movie(movie_data)
+        assert response.status_code == 201, f"Фильм не создан. Статус: {response.status_code}"
+
+        created_movie_data = response.json()
+        created_movies.append(created_movie_data)  # запоминаем для очистки
+        return created_movie_data
+
+    yield _create_movie
+
+    # Очистка после теста: удаляем все созданные фильмы
+    for movie in created_movies:
+        try:
+            api_manager.movies_api.delete_movie(movie["id"], expected_status=204)
+        except Exception as e:
+            print(f"Не удалось удалить фильм {movie['id']}: {e}")
+
+
+import pytest
+from api_classes.api_manager import ApiManager
+
+
+@pytest.fixture(scope="session")
+def admin_api_manager(api_manager: ApiManager):
+    """
+    Фикстура, которая авторизуется как ADMIN и возвращает ApiManager
+    с уже настроенными заголовками авторизации.
+    """
+    # 1. Данные админа
+    admin_creds = ("api1@gmail.com", "asdqwe123Q")
+
+    # 2. Выполняем логин и обновляем заголовки сессии
+    #    Метод authenticate сам установит заголовок Authorization
+    api_manager.auth_api.authenticate(admin_creds)
+
+    # 3. Возвращаем настроенный api_manager
+    return api_manager
 
 #==================================================== до реквестера
 # import requests
