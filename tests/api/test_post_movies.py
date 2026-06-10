@@ -1,4 +1,5 @@
 # test_post_movies pytest tests/api/test_post_movies.py
+
 import pytest
 from faker import Faker
 from api_classes.api_manager import ApiManager
@@ -28,40 +29,31 @@ class TestPostMoviesAPI:
         assert "rating" in movie_data, "Должен быть рейтинг"
         assert movie_data["rating"] == 0, "У нового фильма рейтинг должен быть 0"
 
-    def test_create_movie_minimal_fields(self, admin_api_manager: ApiManager):
-        """Создание фильма только с обязательными полями"""
-        unique_name = fake.unique.catch_phrase()
+    def test_get_movie_by_id_verify_created_data(self, admin_api_manager: ApiManager, api_manager: ApiManager, created_movie, custom_movie_data):
+        """Проверка, что полученные данные соответствуют созданным (без авторизации)"""
+        # Создаем фильм с данными из фикстуры
+        movie = created_movie(**custom_movie_data)
+        movie_id = movie["id"]
 
-        movie_data = {
-            "name": unique_name,
-            "price": 100,
-            "description": "Описание фильма",
-            "location": "MSK",
-            "published": True,
-            "genreId": 1
-        }
+        # Получаем фильм по ID
+        get_response = api_manager.movies_api.get_movie_by_id(movie_id)
+        assert get_response.status_code == 200
+        movie_response = get_response.json()
 
-        response = admin_api_manager.movies_api.create_movie(movie_data)
-        assert response.status_code == 201
-
-        movie = response.json()
-        assert movie["price"] == 100
-        assert movie["description"] == "Описание фильма"
-        assert movie["location"] == "MSK"
-        assert movie["published"] is True
-        assert movie["genreId"] == 1
+        # Сравниваем все поля
+        assert movie_response["name"] == custom_movie_data["name"]
+        assert movie_response["price"] == custom_movie_data["price"]
+        assert movie_response["description"] == custom_movie_data["description"]
+        assert movie_response["location"] == custom_movie_data["location"]
+        assert movie_response["published"] == custom_movie_data["published"]
+        assert movie_response["genreId"] == custom_movie_data["genreId"]
 
     # ==================== НЕГАТИВНЫЕ ТЕСТЫ ====================
-    def test_create_movie_empty_name(self, admin_api_manager: ApiManager):
+    def test_create_movie_empty_name(self, admin_api_manager: ApiManager, custom_movie_data):
         """Создание фильма с пустым названием (ожидается ошибка 400)"""
-        movie_data = {
-            "name": "",
-            "price": 200,
-            "description": "Описание",
-            "location": "MSK",
-            "published": True,
-            "genreId": 1
-        }
+        # Берем данные из фикстуры и переопределяем name
+        movie_data = custom_movie_data.copy()
+        movie_data["name"] = ""
 
         response = admin_api_manager.movies_api.create_movie(movie_data, expected_status=400)
         assert response.status_code == 400
@@ -69,55 +61,22 @@ class TestPostMoviesAPI:
         error = response.json()
         assert "message" in error
 
-    def test_create_movie_duplicate_name(self, admin_api_manager: ApiManager):
-        """Создание фильма только с обязательными полями"""
-
-        movie_data = {
-            "name": "Крестный отец",
-            "price": 100,
-            "description": "Описание фильма",
-            "location": "MSK",
-            "published": True,
-            "genreId": 1
-        }
-
-        response = admin_api_manager.movies_api.create_movie(movie_data)
-        assert response.status_code == 409, f'Ожидаем 409, получили {response.status_code}'
-
-    def test_create_movie_duplicate_name(self, admin_api_manager: ApiManager):
+    def test_create_movie_duplicate_name(self, admin_api_manager: ApiManager, custom_movie_data):
         """Создание фильма с названием, которое уже существует (ожидается ошибка 409)"""
-        from faker import Faker
-        fake = Faker(locale='ru_RU')
-
-        # 1. Создаем ПЕРВЫЙ фильм с уникальным названием
+        # Создаем первый фильм
         unique_name = fake.unique.catch_phrase()
-
-        first_movie_data = {
-            "name": unique_name,
-            "price": 200,
-            "description": "Описание первого фильма",
-            "location": "MSK",
-            "published": True,
-            "genreId": 1
-        }
+        first_movie_data = custom_movie_data.copy()
+        first_movie_data["name"] = unique_name
 
         response_first = admin_api_manager.movies_api.create_movie(first_movie_data)
         assert response_first.status_code == 201
         first_movie = response_first.json()
 
-        # 2. Пытаемся создать ВТОРОЙ фильм с ТАКИМ ЖЕ названием
-        second_movie_data = {
-            "name": unique_name,
-            "price": 300,
-            "description": "Описание второго фильма",
-            "location": "SPB",
-            "published": False,
-            "genreId": 2
-        }
+        # Пытаемся создать второй фильм с тем же названием
+        second_movie_data = custom_movie_data.copy()
+        second_movie_data["name"] = unique_name
 
         response_second = admin_api_manager.movies_api.create_movie(second_movie_data, expected_status=409)
-
-        # 3. Проверяем, что получили ошибку 409 Conflict
         assert response_second.status_code == 409
 
         error_data = response_second.json()
@@ -125,16 +84,14 @@ class TestPostMoviesAPI:
         assert "Фильм с таким названием уже существует" in error_data["message"]
         assert error_data["statusCode"] == 409
 
-    def test_create_movie_negative_price(self, admin_api_manager: ApiManager):
+        # Очистка
+        admin_api_manager.movies_api.delete_movie(first_movie["id"])
+
+    def test_create_movie_negative_price(self, admin_api_manager: ApiManager, custom_movie_data):
         """Создание фильма с отрицательной ценой (ожидается ошибка 400)"""
-        movie_data = {
-            "name": fake.catch_phrase(),
-            "price": -100,
-            "description": "Описание фильма",
-            "location": "MSK",
-            "published": True,
-            "genreId": 1
-        }
+        # Берем данные из фикстуры и меняем цену
+        movie_data = custom_movie_data.copy()
+        movie_data["price"] = -100
 
         response = admin_api_manager.movies_api.create_movie(movie_data, expected_status=400)
         assert response.status_code == 400

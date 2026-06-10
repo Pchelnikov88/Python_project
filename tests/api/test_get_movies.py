@@ -47,8 +47,16 @@ class TestGetMoviesAPI:
         assert response.status_code == 200, f'Ожидали 200, получили {response.status_code}'
 
         data = response.json()
-        assert len(data) <= page_size, \
-            f"Получено {len(data)} фильмов, должно быть не более {page_size}"
+        # Проверяем, что в ответе есть поле movies
+        assert "movies" in data, "В ответе отсутствует поле 'movies'"
+
+        movies = data.get("movies", [])
+        assert len(movies) <= page_size, \
+            f"Получено {len(movies)} фильмов, должно быть не более {page_size}"
+
+        # Дополнительная проверка: pageSize в ответе соответствует запрошенному
+        assert data.get("pageSize") == page_size, \
+            f"pageSize в ответе {data.get('pageSize')} не соответствует запрошенному {page_size}"
 
     def test_get_movies_pagination_first_page(self, api_manager: ApiManager):
         """Проверка получения первой страницы"""

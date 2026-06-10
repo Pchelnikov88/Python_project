@@ -4,10 +4,11 @@ from faker import Faker
 import pytest
 import requests
 import random
-from constants import BASE_URL, REGISTER_ENDPOINT, LOGIN_ENDPOINT
+from constants import BASE_URL, REGISTER_ENDPOINT
 from custom_requester.custom_requester import CustomRequester
 from utils.data_generator import DataGenerator
 from api_classes.api_manager import ApiManager
+
 
 faker = Faker()
 
@@ -39,6 +40,18 @@ def creation_movies_list():
         "location": random.choice(cities),
         "published": fake.boolean(),
         "genreId": fake.random_int(min=1, max=5)
+    }
+
+@pytest.fixture
+def custom_movie_data():
+    """Фикстура с тестовыми данными для фильма"""
+    return {
+        "name": "Проверка соответствия данных-1",
+        "price": 500,
+        "description": "Длинное описание фильма для проверки соответствия данных",
+        "location": "SPB",
+        "published": False,
+        "genreId": 3
     }
 
 # @pytest.fixture(scope="session")
@@ -150,13 +163,9 @@ def created_movie(api_manager):
     # Очистка после теста: удаляем все созданные фильмы
     for movie in created_movies:
         try:
-            api_manager.movies_api.delete_movie(movie["id"], expected_status=204)
+            api_manager.movies_api.delete_movie(movie["id"])  # ← ожидает 200 (по умолчанию)
         except Exception as e:
             print(f"Не удалось удалить фильм {movie['id']}: {e}")
-
-
-import pytest
-from api_classes.api_manager import ApiManager
 
 
 @pytest.fixture(scope="session")

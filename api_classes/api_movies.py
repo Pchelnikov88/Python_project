@@ -1,4 +1,4 @@
-from constants import REGISTER_ENDPOINT, LOGIN_ENDPOINT, MOVIES_ENDPOINT
+from constants import MOVIES_ENDPOINT
 from custom_requester.custom_requester import CustomRequester
 
 class MoviesAPI(CustomRequester):
@@ -25,10 +25,27 @@ class MoviesAPI(CustomRequester):
             expected_status=expected_status
         )
 
+    def get_movie_by_id(self, movie_id: int, expected_status=200):
+        """Получение фильма по его ID."""
+        return self.send_request(
+            method="GET",
+            endpoint=f"{MOVIES_ENDPOINT}/{movie_id}",
+            expected_status=expected_status
+        )
+
     def delete_movie(self, movie_id, expected_status=200):
         """Удаление фильма по ID"""
         return self.send_request(
             method="DELETE",
             endpoint=f"{MOVIES_ENDPOINT}/{movie_id}",
+            expected_status=expected_status
+        )
+
+    def patch_movie(self, movie_id: int, movie_data: dict, expected_status=200):
+        """Частичное обновление фильма по ID (PATCH)."""
+        return self.send_request(
+            method="PATCH",
+            endpoint=f"{MOVIES_ENDPOINT}/{movie_id}",
+            data=movie_data,
             expected_status=expected_status
         )
